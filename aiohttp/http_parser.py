@@ -32,6 +32,7 @@ from .http_exceptions import (
     BadStatusLine,
     ContentEncodingError,
     ContentLengthError,
+    DecompressSizeError,
     InvalidHeader,
     LineTooLong,
     TransferEncodingError,
@@ -48,6 +49,7 @@ try:
 except ImportError:  # pragma: no cover
     HAS_BROTLI = False
 
+MAX_DECOMPRESS_SIZE = 2**25  # 32 MiB
 
 __all__ = (
     "HeadersParser",
@@ -867,6 +869,7 @@ class DeflateBuffer:
         self.size = 0
         self.encoding = encoding
         self._started_decoding = False
+        self._decompressed_output = 0
 
         if encoding == "br":
             if not HAS_BROTLI:  # pragma: no cover
@@ -926,6 +929,12 @@ class DeflateBuffer:
             )
 
         self._started_decoding = True
+
+        self._decompressed_output += len(chunk)
+        if self._decompressed_output > MAX_DECOMPRESS_SIZE:
+            raise DecompressSizeError(
+                "Decompressed data exceeds %d bytes" % MAX_DECOMPRESS_SIZE
+            )
 
         if chunk:
             self.out.feed_data(chunk, len(chunk))

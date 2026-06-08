@@ -24,62 +24,6 @@ env:
 
 jobs:
 
-  lint:
-    name: Linter
-    runs-on: ubuntu-22.04
-    timeout-minutes: 5
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2.4.0
-        with:
-          submodules: true
-      - name: Setup Python 3.8
-        uses: MatteoH2O1999/setup-python@v4
-        with:
-          python-version: 3.8
-      - name: Cache PyPI
-        uses: actions/cache@v4
-        with:
-          key: pip-lint-${{ hashFiles('requirements/*.txt') }}
-          path: ~/.cache/pip
-          restore-keys: |
-            pip-lint-
-      - name: Update pip, wheel, setuptools, build, twine
-        run: |
-          python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -U pip wheel setuptools build twine
-      - name: Install dependencies
-        run: |
-          python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -r requirements/lint.txt -c requirements/constraints.txt
-      - name: Install self
-        run: |
-          python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' .
-        env:
-          AIOHTTP_NO_EXTENSIONS: 1
-      - name: Run linters
-        run: |
-          make mypy
-      - name: Install libenchant
-        run: |
-          sudo apt install libenchant-2-dev
-      - name: Install spell checker
-        run: |
-          pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -r requirements/doc-spelling.txt -c requirements/constraints.txt
-      - name: Run docs spelling
-        run: |
-          # towncrier --yes  # uncomment me after publishing a release
-          make doc-spelling
-      - name: Build package
-        run: |
-          python -m build
-        env:
-          AIOHTTP_NO_EXTENSIONS: 1
-      - name: Run twine checker
-        run: |
-          twine check --strict dist/*
-      - name: Making sure that CONTRIBUTORS.txt remains sorted
-        run: |
-          LC_ALL=C sort -c CONTRIBUTORS.txt
-
   gen_llhttp:
     name: Generate llhttp sources
     runs-on: ubuntu-22.04
@@ -130,23 +74,15 @@ jobs:
             no-extensions: Y
         experimental: [false]
         include:
-          - pyver: pypy-3.8
-            no-extensions: Y
-            os: ubuntu-22.04
-            experimental: false
-          - os: macos-14
-            pyver: 3.11.0-alpha - 3.11.0
-            experimental: true
-            no-extensions: Y
           - os: ubuntu-22.04
-            pyver: 3.11.0-alpha - 3.11.0
+            pyver: 3.11
             experimental: false
             no-extensions: Y
           - os: windows-2022
-            pyver: 3.11.0-alpha - 3.11.0
+            pyver: 3.11
             experimental: true
             no-extensions: Y
-      fail-fast: true
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
     steps:
@@ -182,7 +118,7 @@ jobs:
           make cythonize
       - name: Restore llhttp generated files
         if: ${{ matrix.no-extensions == '' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: llhttp
           path: vendor/llhttp/build/
@@ -226,7 +162,6 @@ jobs:
     if: always()
 
     needs:
-      - lint
       - test
 
     runs-on: ubuntu-22.04
@@ -240,9 +175,6 @@ jobs:
   pre-deploy:
     name: Pre-Deploy
     runs-on: ubuntu-22.04
-    needs: check
-    # Run only on pushing a tag
-    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
     steps:
       - name: Dummy
         run: |
@@ -251,7 +183,7 @@ jobs:
   build-tarball:
     name: Tarball
     runs-on: ubuntu-22.04
-    needs: pre-deploy
+    needs: [pre-deploy, gen_llhttp]
     steps:
       - name: Checkout
         uses: actions/checkout@v2.4.0
@@ -266,7 +198,7 @@ jobs:
         run: |
           python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -r requirements/cython.txt -c requirements/constraints.txt
       - name: Restore llhttp generated files
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: llhttp
           path: vendor/llhttp/build/
@@ -279,25 +211,18 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-sdist
           path: dist
 
   build-wheels:
     name: Build wheels on ${{ matrix.os }} ${{ matrix.qemu }}
     runs-on: ${{ matrix.os }}-latest
-    needs: pre-deploy
+    needs: [pre-deploy, gen_llhttp]
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu, windows, macos]
+        os: [ubuntu, macos]
         qemu: ['']
-        include:
-          # Split ubuntu job for the sake of speed-up
-          - os: ubuntu
-            qemu: aarch64
-          - os: ubuntu
-            qemu: ppc64le
-          - os: ubuntu
-            qemu: s390x
     steps:
       - name: Checkout
         uses: actions/checkout@v2.4.0
@@ -320,7 +245,7 @@ jobs:
       - name: Setup Python
         uses: MatteoH2O1999/setup-python@v4
         with:
-          python-version: 3.x
+          python-version: 3.12
       - name: Update pip, wheel, setuptools, build, twine
         run: |
           python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -U pip wheel setuptools build twine
@@ -328,7 +253,7 @@ jobs:
         run: |
           python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -r requirements/cython.txt -c requirements/constraints.txt
       - name: Restore llhttp generated files
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: llhttp
           path: vendor/llhttp/build/
@@ -336,18 +261,21 @@ jobs:
         run: |
           make cythonize
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.14.1
+        uses: pypa/cibuildwheel@v2.16.5
         env:
           CIBW_ARCHS_MACOS: x86_64 arm64 universal2
+          CIBW_SKIP: cp312-* pp*
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-${{ matrix.os }}-${{ matrix.qemu }}
           path: ./wheelhouse/*.whl
 
   deploy:
     name: Deploy
     needs: [build-tarball, build-wheels]
     runs-on: ubuntu-22.04
+    # Run only on pushing a tag — never publish on branch push
+    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
 
     permissions:
       contents: write  # IMPORTANT: mandatory for making GitHub Releases
