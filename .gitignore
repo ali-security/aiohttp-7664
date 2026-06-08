@@ -64,3 +64,6 @@ sources
 var/*
 venv
 virtualenv.py
+
+!aiohttp/_vendored/**/
+!aiohttp/_vendored/**

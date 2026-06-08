@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+import zlib
 from typing import Any, List
 from unittest import mock
 from urllib.parse import quote
@@ -1202,3 +1203,41 @@ class TestDeflateBuffer:
         dbuf.feed_eof()
 
         assert buf.at_eof()
+
+    async def test_decompress_size_limit(self, stream) -> None:
+        buf = aiohttp.FlowControlDataQueue(
+            stream, 2**16, loop=asyncio.get_event_loop()
+        )
+        dbuf = DeflateBuffer(buf, "deflate", max_decompress_size=1024)
+
+        original = b"A" * (2**20)
+        compressed = zlib.compress(original)
+
+        with pytest.raises(http_exceptions.ContentEncodingError):
+            dbuf.feed_data(compressed, len(compressed))
+
+    @pytest.mark.parametrize(
+        "chunk_size",
+        [1024, 2**14, 2**16],
+        ids=["1KB", "16KB", "64KB"],
+    )
+    async def test_streaming_decompress_large_payload(
+        self, stream, chunk_size: int
+    ) -> None:
+        original = b"A" * (3 * 2**20)
+        compressed = zlib.compress(original)
+
+        buf = aiohttp.FlowControlDataQueue(
+            stream, 2**16, loop=asyncio.get_event_loop()
+        )
+        dbuf = DeflateBuffer(buf, "deflate")
+
+        for i in range(0, len(compressed), chunk_size):
+            chunk = compressed[i : i + chunk_size]
+            dbuf.feed_data(chunk, len(chunk))
+
+        dbuf.feed_eof()
+
+        result = b"".join(d for d, _ in buf._buffer)
+        assert len(result) == len(original)
+        assert result == original
