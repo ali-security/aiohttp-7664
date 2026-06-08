@@ -17,10 +17,12 @@ except ImportError:  # pragma: no cover
 
 
 def _run_py(code: str) -> "subprocess.CompletedProcess[str]":
+    # capture_output / text were added in 3.7; use the 3.6-compatible spelling.
     return subprocess.run(
         [sys.executable, "-c", textwrap.dedent(code)],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
     )
 
 
