@@ -64,3 +64,9 @@ sources
 var/*
 venv
 virtualenv.py
+
+# CVE-2025-69223: the vendored Brotli copy ships its C source + public headers
+# (aiohttp/_vendored/brotli_src). Override the generic ignores above (notably
+# ``include/``) so the whole vendored tree is tracked, committed, and packaged.
+!aiohttp/_vendored/**/
+!aiohttp/_vendored/**
