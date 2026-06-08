@@ -49,7 +49,7 @@ try:
 except ImportError:  # pragma: no cover
     HAS_BROTLI = False
 
-MAX_DECOMPRESS_SIZE = 2**25  # 32 MiB
+DEFAULT_MAX_DECOMPRESS_SIZE = 2**25  # 32 MiB
 
 __all__ = (
     "HeadersParser",
@@ -864,12 +864,17 @@ class DeflateBuffer:
 
     decompressor: Any
 
-    def __init__(self, out: StreamReader, encoding: Optional[str]) -> None:
+    def __init__(
+        self,
+        out: StreamReader,
+        encoding: Optional[str],
+        max_decompress_size: int = DEFAULT_MAX_DECOMPRESS_SIZE,
+    ) -> None:
         self.out = out
         self.size = 0
         self.encoding = encoding
         self._started_decoding = False
-        self._decompressed_output = 0
+        self._max_decompress_size = max_decompress_size
 
         if encoding == "br":
             if not HAS_BROTLI:  # pragma: no cover
@@ -885,7 +890,7 @@ class DeflateBuffer:
                 def __init__(self) -> None:
                     self._obj = brotli.Decompressor()
 
-                def decompress(self, data: bytes) -> bytes:
+                def decompress(self, data: bytes, max_length: int = 0) -> bytes:
                     if hasattr(self._obj, "decompress"):
                         return cast(bytes, self._obj.decompress(data))
                     return cast(bytes, self._obj.process(data))
@@ -922,7 +927,10 @@ class DeflateBuffer:
             self.decompressor = zlib.decompressobj(wbits=-zlib.MAX_WBITS)
 
         try:
-            chunk = self.decompressor.decompress(chunk)
+            # Decompress with limit + 1 so we can detect if output exceeds limit
+            chunk = self.decompressor.decompress(
+                chunk, max_length=self._max_decompress_size + 1
+            )
         except Exception:
             raise ContentEncodingError(
                 "Can not decode content-encoding: %s" % self.encoding
@@ -930,10 +938,10 @@ class DeflateBuffer:
 
         self._started_decoding = True
 
-        self._decompressed_output += len(chunk)
-        if self._decompressed_output > MAX_DECOMPRESS_SIZE:
+        if len(chunk) > self._max_decompress_size:
             raise DecompressSizeError(
-                "Decompressed data exceeds %d bytes" % MAX_DECOMPRESS_SIZE
+                "Decompressed data exceeds the configured limit of %d bytes"
+                % self._max_decompress_size
             )
 
         if chunk:

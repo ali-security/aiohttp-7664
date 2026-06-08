@@ -1206,19 +1206,18 @@ class TestDeflateBuffer:
         assert buf.at_eof()
 
     async def test_decompress_size_limit(self, stream) -> None:
-        import aiohttp.http_parser as hp_mod
-
         buf = aiohttp.FlowControlDataQueue(
             stream, 2**16, loop=asyncio.get_event_loop()
         )
-        dbuf = DeflateBuffer(buf, "deflate")
+        dbuf = DeflateBuffer(buf, "deflate", max_decompress_size=1024)
 
-        original = b"A" * (3 * 2**20)
+        # ~1MiB of repeated bytes compresses tiny but expands well past 1KiB
+        # in a single decompress call.
+        original = b"A" * (2**20)
         compressed = zlib.compress(original)
 
-        with mock.patch.object(hp_mod, "MAX_DECOMPRESS_SIZE", 1024):
-            with pytest.raises(DecompressSizeError):
-                dbuf.feed_data(compressed, len(compressed))
+        with pytest.raises(DecompressSizeError):
+            dbuf.feed_data(compressed, len(compressed))
 
     @pytest.mark.parametrize(
         "chunk_size",
@@ -1228,6 +1227,8 @@ class TestDeflateBuffer:
     async def test_streaming_decompress_large_payload(
         self, stream, chunk_size: int
     ) -> None:
+        # A legitimately large body (3MiB) below the limit must decompress
+        # fully even when streamed in small network-sized chunks.
         original = b"A" * (3 * 2**20)
         compressed = zlib.compress(original)
 
@@ -1237,8 +1238,8 @@ class TestDeflateBuffer:
         dbuf = DeflateBuffer(buf, "deflate")
 
         for i in range(0, len(compressed), chunk_size):
-            chunk = compressed[i : i + chunk_size]
-            dbuf.feed_data(chunk, len(chunk))
+            piece = compressed[i : i + chunk_size]
+            dbuf.feed_data(piece, len(piece))
 
         dbuf.feed_eof()
 
