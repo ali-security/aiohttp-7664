@@ -269,7 +269,8 @@ jobs:
         env:
           CIBW_ARCHS_MACOS: x86_64 arm64 universal2
           CIBW_SKIP: cp312-* pp*
-          CIBW_ENVIRONMENT: PIP_INDEX_URL=https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/
+          CIBW_BUILD_FRONTEND: "pip; args: --no-build-isolation"
+          CIBW_BEFORE_BUILD: pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' 'setuptools>=46.4.0,<70.1' wheel
       - uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.os }}-${{ matrix.qemu }}
