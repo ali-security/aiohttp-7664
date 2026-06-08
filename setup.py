@@ -27,14 +27,6 @@ if IS_GIT_REPO and not (HERE / "vendor/llhttp/README.md").exists():
 
 # NOTE: makefile cythonizes all Cython modules
 
-
-# CVE-2025-69223: aiohttp ships a private copy of Brotli >= 1.2 under
-# ``aiohttp/_vendored`` so it can cap brotli decompression output WITHOUT
-# bumping the user's declared ``Brotli`` requirement. The compiled extension is
-# a BUILD output -- the C source is vendored, the binary is never committed. The
-# C library sources + binding are copied verbatim from Brotli 1.2.0; only the
-# include path is repointed to the vendored tree. PyPy/brotlicffi is
-# intentionally not vendored (we ship no PyPy wheels) -- see process/README.md.
 _BROTLI_VENDOR = "aiohttp/_vendored/brotli_src"
 _brotli_extension = Extension(
     "aiohttp._vendored._brotli",
@@ -95,17 +87,12 @@ extensions = [
     ),
     Extension("aiohttp._helpers", ["aiohttp/_helpers.c"]),
     Extension("aiohttp._http_writer", ["aiohttp/_http_writer.c"]),
-    # The vendored Brotli C extension is the CVE-2025-69223 fix delivery vehicle
-    # on CPython, so it is built whenever we are on CPython -- even when the
-    # Cython accelerators are disabled via AIOHTTP_NO_EXTENSIONS (see below).
     _brotli_extension,
 ]
 
 
 build_type = "Pure" if NO_EXTENSIONS else "Accelerated"
 if IS_CPYTHON and NO_EXTENSIONS:
-    # Pure CPython build still ships the brotli CVE fix as a compiled extension;
-    # only the Cython accelerators are dropped.
     setup_kwargs = {"ext_modules": [_brotli_extension]}
 elif NO_EXTENSIONS:
     setup_kwargs = {}

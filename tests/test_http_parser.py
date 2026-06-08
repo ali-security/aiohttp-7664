@@ -1210,8 +1210,6 @@ class TestDeflateBuffer:
         )
         dbuf = DeflateBuffer(buf, "deflate", max_decompress_size=1024)
 
-        # ~1MiB of repeated bytes compresses tiny but would expand well past
-        # 1KiB; the cap must abort in a single decompress call.
         original = b"A" * (2**20)
         compressed = zlib.compress(original)
 
@@ -1220,14 +1218,12 @@ class TestDeflateBuffer:
 
     @pytest.mark.parametrize(
         "chunk_size",
-        [1024, 2**14, 2**16],  # 1KB, 16KB, 64KB
+        [1024, 2**14, 2**16],
         ids=["1KB", "16KB", "64KB"],
     )
     async def test_streaming_decompress_large_payload(
         self, stream, chunk_size: int
     ) -> None:
-        """Large but legitimate payloads (< limit) decompress fully even when
-        streamed in small network-sized chunks."""
         original = b"A" * (3 * 2**20)
         compressed = zlib.compress(original)
 

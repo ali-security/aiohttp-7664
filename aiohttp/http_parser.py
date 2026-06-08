@@ -69,10 +69,6 @@ def _brotli_has_max_length_cap(mod: ModuleType) -> bool:
 
 
 def _import_vendored_brotli() -> Optional[ModuleType]:
-    # CVE-2025-69223: the vendored copy is a CPython C extension. We ship no
-    # PyPy wheels, so brotlicffi is intentionally NOT vendored (see
-    # process/README.md). On non-CPython we fall back to the system module --
-    # the br path is then unbounded (best-effort), exactly as before the fix.
     if platform.python_implementation() != "CPython":  # pragma: no cover
         return _brotli
     from ._vendored import brotli as vendored_brotli
@@ -80,11 +76,6 @@ def _import_vendored_brotli() -> Optional[ModuleType]:
     return vendored_brotli
 
 
-# CVE-2025-69223 (decompression bomb): `_brotli` is the system module and drives
-# `HAS_BROTLI` / `br` advertisement unchanged. `_brotli_decompressor` is the
-# module actually used to decompress: the system brotli when it already caps
-# output (>= 1.2), otherwise a private vendored Brotli 1.2 copy. This bounds
-# brotli decompression WITHOUT bumping the user's `Brotli` requirement.
 _brotli: Optional[ModuleType] = _import_system_brotli()
 HAS_BROTLI = _brotli is not None
 
@@ -97,8 +88,6 @@ DEFAULT_MAX_DECOMPRESS_SIZE = 2**25  # 32 MiB
 
 
 class BrotliDecompressor:
-    # Supports both 'brotlicffi' and 'Brotli' packages since they share an
-    # import name. The top branch is for 'brotlicffi', the bottom for 'Brotli'.
     def __init__(self) -> None:
         if not HAS_BROTLI or _brotli_decompressor is None:  # pragma: no cover
             raise ContentEncodingError(
@@ -976,7 +965,6 @@ class DeflateBuffer:
             self.decompressor = zlib.decompressobj(wbits=-zlib.MAX_WBITS)
 
         try:
-            # Decompress with limit + 1 so we can detect if output exceeds limit
             chunk = self.decompressor.decompress(
                 chunk, max_length=self._max_decompress_size + 1
             )
@@ -987,9 +975,6 @@ class DeflateBuffer:
 
         self._started_decoding = True
 
-        # CVE-2025-69223: a single decompress call yields at most limit + 1
-        # bytes (zlib/brotli buffer the remainder), so the bomb never fully
-        # expands; exceeding the limit aborts the stream.
         if len(chunk) > self._max_decompress_size:
             raise ContentEncodingError(
                 "Decompressed data exceeds the configured limit of %d bytes"

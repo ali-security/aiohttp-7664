@@ -59,8 +59,6 @@ def _find_all_importables(pkg: ModuleType) -> List[str]:
                 # * https://github.com/python/mypy/pull/9454
                 for p in pkg.__path__  # type: ignore[attr-defined]
             )
-            # CVE-2025-69223: the vendored Brotli copy is third-party code and
-            # is imported lazily/namespaced; skip it in the import sweep.
             if not name.startswith(f"{pkg.__name__}._vendored")
         },
     )

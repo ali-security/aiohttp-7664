@@ -17,7 +17,6 @@ except ImportError:  # pragma: no cover
 
 
 def _run_py(code: str) -> "subprocess.CompletedProcess[str]":
-    # capture_output / text were added in 3.7; use the 3.6-compatible spelling.
     return subprocess.run(
         [sys.executable, "-c", textwrap.dedent(code)],
         stdout=subprocess.PIPE,
@@ -157,14 +156,18 @@ def test_no_system_brotli_disables_br_subprocess() -> None:
         from aiohttp.streams import StreamReader
         from aiohttp.base_protocol import BaseProtocol
         async def _check():
-            loop = asyncio.get_running_loop()
+            loop = asyncio.get_event_loop()
             sr = StreamReader(BaseProtocol(loop), 2**16, loop=loop)
             try:
                 DeflateBuffer(sr, "br")
             except ContentEncodingError:
                 return True
             return False
-        assert asyncio.run(_check()) is True
+        loop = asyncio.new_event_loop()
+        try:
+            assert loop.run_until_complete(_check()) is True
+        finally:
+            loop.close()
         print("OK br disabled, vendored still ships")
         """)
     assert result.returncode == 0, result.stderr
