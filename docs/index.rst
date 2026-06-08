@@ -31,14 +31,14 @@ Library Installation
 
 .. code-block:: bash
 
-   $ pip install aiohttp
+   $ pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' aiohttp
 
 You may want to install *optional* :term:`cchardet` library as faster
 replacement for :term:`charset-normalizer`:
 
 .. code-block:: bash
 
-   $ pip install cchardet
+   $ pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' cchardet
 
 .. include:: _snippets/cchardet-unmaintained-admonition.rst
 
@@ -48,7 +48,7 @@ This option is highly recommended:
 
 .. code-block:: bash
 
-   $ pip install aiodns
+   $ pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' aiodns
 
 Installing all speedups in one command
 --------------------------------------
@@ -59,7 +59,7 @@ separate commands anymore!
 
 .. code-block:: bash
 
-   $ pip install aiohttp[speedups]
+   $ pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' aiohttp[speedups]
 
 Getting Started
 ===============
@@ -157,14 +157,14 @@ Dependencies
 
   .. code-block:: bash
 
-     $ pip install cchardet
+     $ pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' cchardet
 
 - *Optional* :term:`aiodns` for fast DNS resolving. The
   library is highly recommended.
 
   .. code-block:: bash
 
-     $ pip install aiodns
+     $ pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' aiodns
 
 
 Communication channels

@@ -47,10 +47,10 @@ endif
 .SECONDARY: $(call to-hash,$(ALLS))
 
 .update-pip:
-	@python -m pip install --upgrade pip
+	@python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' --upgrade pip
 
 .install-cython: .update-pip $(call to-hash,requirements/cython.txt)
-	@python -m pip install -r requirements/cython.txt -c requirements/constraints.txt
+	@python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -r requirements/cython.txt -c requirements/constraints.txt
 	@touch .install-cython
 
 aiohttp/_find_header.c: $(call to-hash,aiohttp/hdrs.py ./tools/gen.py)
@@ -74,7 +74,7 @@ generate-llhttp: .llhttp-gen
 cythonize: .install-cython $(PYXS:.pyx=.c)
 
 .install-deps: .install-cython $(PYXS:.pyx=.c) $(call to-hash,$(CYS) $(REQS))
-	@python -m pip install -r requirements/dev.txt -c requirements/constraints.txt
+	@python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -r requirements/dev.txt -c requirements/constraints.txt
 	@touch .install-deps
 
 .PHONY: lint
@@ -89,7 +89,7 @@ mypy:
 	mypy
 
 .develop: .install-deps generate-llhttp $(call to-hash,$(PYS) $(CYS) $(CS))
-	python -m pip install -e . -c requirements/constraints.txt
+	python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -e . -c requirements/constraints.txt
 	@touch .develop
 
 .PHONY: test
@@ -182,7 +182,7 @@ compile-deps: .update-pip $(REQS)
 
 .PHONY: install
 install: .update-pip
-	@python -m pip install -r requirements/dev.txt -c requirements/constraints.txt
+	@python -m pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -r requirements/dev.txt -c requirements/constraints.txt
 
 .PHONY: install-dev
 install-dev: .develop

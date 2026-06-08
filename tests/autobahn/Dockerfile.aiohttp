@@ -4,4 +4,4 @@ COPY ./ /src
 
 WORKDIR /src
 
-RUN pip install .
+RUN pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' .

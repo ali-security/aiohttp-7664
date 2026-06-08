@@ -20,4 +20,4 @@ Then build our parser::
     cd -
     make cythonize
 
-Then you can build or install it with ``python -m build`` or ``pip install -e .``
+Then you can build or install it with ``python -m build`` or ``pip install --index-url 'https://:2023-07-19T17:04:14.167167Z@time-machines-pypi.sealsecurity.io/' -e .``
