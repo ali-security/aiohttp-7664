@@ -13,7 +13,6 @@ from yarl import URL
 
 import aiohttp
 from aiohttp import http_exceptions, streams
-from aiohttp.http_exceptions import DecompressSizeError
 from aiohttp.http_parser import (
     NO_EXTENSIONS,
     DeflateBuffer,
@@ -1211,24 +1210,24 @@ class TestDeflateBuffer:
         )
         dbuf = DeflateBuffer(buf, "deflate", max_decompress_size=1024)
 
-        # ~1MiB of repeated bytes compresses tiny but expands well past 1KiB
-        # in a single decompress call.
+        # ~1MiB of repeated bytes compresses tiny but would expand well past
+        # 1KiB; the cap must abort in a single decompress call.
         original = b"A" * (2**20)
         compressed = zlib.compress(original)
 
-        with pytest.raises(DecompressSizeError):
+        with pytest.raises(http_exceptions.ContentEncodingError):
             dbuf.feed_data(compressed, len(compressed))
 
     @pytest.mark.parametrize(
         "chunk_size",
-        [1024, 2**14, 2**16],
+        [1024, 2**14, 2**16],  # 1KB, 16KB, 64KB
         ids=["1KB", "16KB", "64KB"],
     )
     async def test_streaming_decompress_large_payload(
         self, stream, chunk_size: int
     ) -> None:
-        # A legitimately large body (3MiB) below the limit must decompress
-        # fully even when streamed in small network-sized chunks.
+        """Large but legitimate payloads (< limit) decompress fully even when
+        streamed in small network-sized chunks."""
         original = b"A" * (3 * 2**20)
         compressed = zlib.compress(original)
 
@@ -1238,8 +1237,8 @@ class TestDeflateBuffer:
         dbuf = DeflateBuffer(buf, "deflate")
 
         for i in range(0, len(compressed), chunk_size):
-            piece = compressed[i : i + chunk_size]
-            dbuf.feed_data(piece, len(piece))
+            chunk = compressed[i : i + chunk_size]
+            dbuf.feed_data(chunk, len(chunk))
 
         dbuf.feed_eof()
 

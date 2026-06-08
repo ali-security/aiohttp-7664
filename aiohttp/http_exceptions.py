@@ -67,10 +67,6 @@ class ContentEncodingError(PayloadEncodingError):
     """Content encoding error."""
 
 
-class DecompressSizeError(ContentEncodingError):
-    """Decompressed data exceeds the maximum allowed size."""
-
-
 class TransferEncodingError(PayloadEncodingError):
     """transfer encoding error."""
 

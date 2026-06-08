@@ -47,8 +47,9 @@ def _find_all_importables(pkg: ModuleType) -> List[str]:
     Return them in order.
     """
     return sorted(
-        set(
-            chain.from_iterable(
+        {
+            name
+            for name in chain.from_iterable(
                 _discover_path_importables(Path(p), pkg.__name__)
                 # FIXME: Unignore after upgrading to `mypy > 0.910`. The fix
                 # FIXME: is in the `master` branch of upstream since Aug 4,
@@ -57,8 +58,11 @@ def _find_all_importables(pkg: ModuleType) -> List[str]:
                 # * https://github.com/python/mypy/issues/1422
                 # * https://github.com/python/mypy/pull/9454
                 for p in pkg.__path__  # type: ignore[attr-defined]
-            ),
-        ),
+            )
+            # CVE-2025-69223: the vendored Brotli copy is third-party code and
+            # is imported lazily/namespaced; skip it in the import sweep.
+            if not name.startswith(f"{pkg.__name__}._vendored")
+        },
     )
 
 

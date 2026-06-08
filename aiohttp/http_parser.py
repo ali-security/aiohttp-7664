@@ -32,7 +32,6 @@ from .http_exceptions import (
     BadStatusLine,
     ContentEncodingError,
     ContentLengthError,
-    DecompressSizeError,
     InvalidHeader,
     LineTooLong,
     TransferEncodingError,
@@ -42,14 +41,82 @@ from .log import internal_logger
 from .streams import EMPTY_PAYLOAD, StreamReader
 from .typedefs import Final, RawHeaders
 
-try:
-    import brotli
+import importlib
+import importlib.util
+import platform
+from types import ModuleType
 
-    HAS_BROTLI = True
-except ImportError:  # pragma: no cover
-    HAS_BROTLI = False
+
+def _import_system_brotli() -> Optional[ModuleType]:
+    for name in ("brotlicffi", "brotli"):
+        try:
+            if importlib.util.find_spec(name) is None:
+                continue
+        except (ImportError, ValueError):  # pragma: no cover
+            continue
+        try:
+            return importlib.import_module(name)
+        except Exception:  # pragma: no cover
+            return None
+    return None
+
+
+def _brotli_has_max_length_cap(mod: ModuleType) -> bool:
+    try:
+        return tuple(int(p) for p in mod.__version__.split(".")[:2]) >= (1, 2)
+    except Exception:  # pragma: no cover
+        return False
+
+
+def _import_vendored_brotli() -> Optional[ModuleType]:
+    # CVE-2025-69223: the vendored copy is a CPython C extension. We ship no
+    # PyPy wheels, so brotlicffi is intentionally NOT vendored (see
+    # process/README.md). On non-CPython we fall back to the system module --
+    # the br path is then unbounded (best-effort), exactly as before the fix.
+    if platform.python_implementation() != "CPython":  # pragma: no cover
+        return _brotli
+    from ._vendored import brotli as vendored_brotli
+
+    return vendored_brotli
+
+
+# CVE-2025-69223 (decompression bomb): `_brotli` is the system module and drives
+# `HAS_BROTLI` / `br` advertisement unchanged. `_brotli_decompressor` is the
+# module actually used to decompress: the system brotli when it already caps
+# output (>= 1.2), otherwise a private vendored Brotli 1.2 copy. This bounds
+# brotli decompression WITHOUT bumping the user's `Brotli` requirement.
+_brotli: Optional[ModuleType] = _import_system_brotli()
+HAS_BROTLI = _brotli is not None
+
+if _brotli is not None and not _brotli_has_max_length_cap(_brotli):
+    _brotli_decompressor: Optional[ModuleType] = _import_vendored_brotli()
+else:
+    _brotli_decompressor = _brotli
 
 DEFAULT_MAX_DECOMPRESS_SIZE = 2**25  # 32 MiB
+
+
+class BrotliDecompressor:
+    # Supports both 'brotlicffi' and 'Brotli' packages since they share an
+    # import name. The top branch is for 'brotlicffi', the bottom for 'Brotli'.
+    def __init__(self) -> None:
+        if not HAS_BROTLI or _brotli_decompressor is None:  # pragma: no cover
+            raise ContentEncodingError(
+                "Can not decode content-encoding: brotli (br). "
+                "Please install `Brotli`"
+            )
+        self._obj = _brotli_decompressor.Decompressor()
+
+    def decompress(self, data: bytes, max_length: int = 0) -> bytes:
+        if hasattr(self._obj, "decompress"):
+            return cast(bytes, self._obj.decompress(data, max_length))
+        return cast(bytes, self._obj.process(data, max_length))
+
+    def flush(self) -> bytes:
+        if hasattr(self._obj, "flush"):
+            return cast(bytes, self._obj.flush())
+        return b""
+
 
 __all__ = (
     "HeadersParser",
@@ -882,25 +949,7 @@ class DeflateBuffer:
                     "Can not decode content-encoding: brotli (br). "
                     "Please install `Brotli`"
                 )
-
-            class BrotliDecoder:
-                # Supports both 'brotlipy' and 'Brotli' packages
-                # since they share an import name. The top branches
-                # are for 'brotlipy' and bottom branches for 'Brotli'
-                def __init__(self) -> None:
-                    self._obj = brotli.Decompressor()
-
-                def decompress(self, data: bytes, max_length: int = 0) -> bytes:
-                    if hasattr(self._obj, "decompress"):
-                        return cast(bytes, self._obj.decompress(data))
-                    return cast(bytes, self._obj.process(data))
-
-                def flush(self) -> bytes:
-                    if hasattr(self._obj, "flush"):
-                        return cast(bytes, self._obj.flush())
-                    return b""
-
-            self.decompressor = BrotliDecoder()
+            self.decompressor = BrotliDecompressor()
         else:
             zlib_mode = 16 + zlib.MAX_WBITS if encoding == "gzip" else zlib.MAX_WBITS
             self.decompressor = zlib.decompressobj(wbits=zlib_mode)
@@ -938,8 +987,11 @@ class DeflateBuffer:
 
         self._started_decoding = True
 
+        # CVE-2025-69223: a single decompress call yields at most limit + 1
+        # bytes (zlib/brotli buffer the remainder), so the bomb never fully
+        # expands; exceeding the limit aborts the stream.
         if len(chunk) > self._max_decompress_size:
-            raise DecompressSizeError(
+            raise ContentEncodingError(
                 "Decompressed data exceeds the configured limit of %d bytes"
                 % self._max_decompress_size
             )
