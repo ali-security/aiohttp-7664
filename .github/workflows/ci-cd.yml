@@ -67,6 +67,8 @@ jobs:
           - os: macos-14
             no-extensions: Y
           - os: macos-14
+            pyver: 3.6
+          - os: macos-14
             pyver: 3.7
           - os: macos-14
             pyver: 3.8
